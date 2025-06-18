@@ -3,23 +3,30 @@ local Player = require("player")
 local Level = require("level")
 local UI = require("ui")
 local GameUI = require("game_ui")
+local DebugConsole = require("debug_console")
 
 -- Game state variables
 local gameState = "menu"  -- Can be "menu", "playing", "paused"
 local uiCallbacks = {}
 
 function love.load()
-    -- Create player at center of screen
-    player = Player.new(400, 300)
+    -- Initialize player as nil (will be created when game starts)
+    player = nil
 
 	-- Load level (either directly or from a file)
-    currentLevel = Level.new(require("levels/level1"))
+    currentLevel = Level.new(require("levels/level2"))
     
     -- Initialize UI system
     UI.init()
     
+    -- Initialize debug console
+    DebugConsole.init()
+    
     -- Load main menu UI
     GameUI.initMainMenu(function()
+        -- Create player when game starts
+        player = Player.new(400, 300)
+        
         -- Start game callback
         gameState = "playing"
         UI.clear()
@@ -97,8 +104,8 @@ function love.update(dt)
         end)
     end
 
-    -- Only update game elements if playing
-    if gameState == "playing" then
+    -- Only update game elements if playing and player exists
+    if gameState == "playing" and player then
         player:update(dt, currentLevel)
         currentLevel:update(dt, player)
         
@@ -110,17 +117,25 @@ function love.update(dt)
     
     -- Update UI
     UI.update(dt)
+    
+    -- Update debug console
+    DebugConsole.update(dt)
 end
 
 function love.draw()
     -- Draw game world
 	currentLevel:draw()
     
-    -- Draw player with camera offset
-    local offsetX = love.graphics.getWidth()/2 - currentLevel.camera.x
-    local offsetY = love.graphics.getHeight()/2 - currentLevel.camera.y
-    player:draw(offsetX, offsetY)
+    -- Draw player only when game is playing
+    if gameState == "playing" then
+        local offsetX = love.graphics.getWidth()/2 - currentLevel.camera.x
+        local offsetY = love.graphics.getHeight()/2 - currentLevel.camera.y
+        player:draw(offsetX, offsetY)
+    end
     
     -- Draw UI elements (on top of game world)
     UI.draw()
+    
+    -- Draw debug console (on top of everything)
+    DebugConsole.draw()
 end

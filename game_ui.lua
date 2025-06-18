@@ -141,7 +141,9 @@ local function initMainMenu(startCallback)
         200,
         50,
         "Quit",
-        function() love.event.quit() end
+        function() 
+            love.event.quit() 
+        end
     )
 end
 

@@ -1,7 +1,6 @@
 local Player = {}
 
-function Player.new(x, y)
-    local self = {
+function Player.new(x, y)    local self = {
         x = x or 0,
         y = y or 0,
         speed = 200,
@@ -11,7 +10,8 @@ function Player.new(x, y)
         currentState = "idle",
         animations = {},
         currentAnimation = nil,
-        facingDirection = 1 -- 1 for right, -1 for left
+        facingDirection = 1, -- 1 for right, -1 for left
+        _debugTimer = 0 -- Timer for throttling debug updates
     }
 
      -- Load all animation types
@@ -117,8 +117,7 @@ function Player:update(dt, level)
     end
     
     self:setState(newState)
-    
-    -- Update current animation
+      -- Update current animation
     self:updateAnimation(dt)
     
     
@@ -130,6 +129,21 @@ function Player:update(dt, level)
         -- Existing screen boundary code
         self.x = math.max(0, math.min(love.graphics.getWidth(), self.x))
         self.y = math.max(0, math.min(love.graphics.getHeight(), self.y))
+    end
+    
+    -- Update debug info in Console
+    -- We only do this occasionally to prevent console spam
+    if self._debugTimer and self._debugTimer > 0 then
+        self._debugTimer = self._debugTimer - dt
+    else        self._debugTimer = 0.5  -- Update debug info every half second
+        
+        -- Get the debug console module
+        local DebugConsole = require("debug_console")
+        
+        -- Update debug values
+        DebugConsole._playerState = "State: " .. self.currentState
+        DebugConsole._playerFacing = "Facing: " .. (self.facingDirection == 1 and "Right" or "Left") 
+        DebugConsole._playerPosition = "Position: " .. math.floor(self.x) .. ", " .. math.floor(self.y)
     end
 end
 
@@ -180,12 +194,7 @@ function Player:draw(offsetX, offsetY)
         
         love.graphics.draw(currentImage, self.x + offsetX, self.y + offsetY, 0, scaleX, scaleY, currentImage:getWidth()/2, currentImage:getHeight()/2)
     end
-    
-    -- Debug: Show current state
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.print("State: " .. self.currentState, 10, 10)
-    love.graphics.print("Facing: " .. (self.facingDirection == 1 and "Right" or "Left"), 10, 30)
-    love.graphics.print("Position: " .. math.floor(self.x) .. ", " .. math.floor(self.y), 10, 50)
+      -- Debug info is now handled by the Console module
 end
 
 return Player
