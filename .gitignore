@@ -1,3 +1,7 @@
+#ingore files in these directories
+/examples/* 
+/archive/* 
+
 # Compiled Lua sources
 luac.out
 

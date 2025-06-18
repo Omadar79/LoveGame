@@ -1,9 +1,31 @@
 
 local Player = require("player")
+local Level = require("level")
+local UI = require("ui")
+local GameUI = require("game_ui")
+
+-- Game state variables
+local gameState = "menu"  -- Can be "menu", "playing", "paused"
+local uiCallbacks = {}
 
 function love.load()
     -- Create player at center of screen
     player = Player.new(400, 300)
+
+	-- Load level (either directly or from a file)
+    currentLevel = Level.new(require("levels/level1"))
+    
+    -- Initialize UI system
+    UI.init()
+    
+    -- Load main menu UI
+    GameUI.initMainMenu(function()
+        -- Start game callback
+        gameState = "playing"
+        UI.clear()
+        uiCallbacks = GameUI.initGameUI(player)
+    end)
+
 
 end
 
@@ -64,16 +86,41 @@ function love.run()
 end
 
 function love.update(dt)
+    -- Handle input for game state changes
+    if gameState == "playing" and love.keyboard.isDown("escape") then
+        gameState = "paused"
+        UI.clear()
+        GameUI.initPauseMenu(function()
+            gameState = "playing"
+            UI.clear()
+            uiCallbacks = GameUI.initGameUI(player)
+        end)
+    end
 
-   player:update(dt)
-
+    -- Only update game elements if playing
+    if gameState == "playing" then
+        player:update(dt, currentLevel)
+        currentLevel:update(dt, player)
+        
+        -- Update UI with player data
+        if uiCallbacks.updateHealth then
+            uiCallbacks.updateHealth()
+        end
+    end
+    
+    -- Update UI
+    UI.update(dt)
 end
 
 function love.draw()
+    -- Draw game world
+	currentLevel:draw()
     
-    --x, y, w, h = 20, 20, 1600, 1200
-    --love.graphics.setColor(0, 0.4, 0.4)
-    --love.graphics.rectangle("fill", x, y, w, h)
-    player:draw()
-
+    -- Draw player with camera offset
+    local offsetX = love.graphics.getWidth()/2 - currentLevel.camera.x
+    local offsetY = love.graphics.getHeight()/2 - currentLevel.camera.y
+    player:draw(offsetX, offsetY)
+    
+    -- Draw UI elements (on top of game world)
+    UI.draw()
 end

@@ -5,10 +5,13 @@ function Player.new(x, y)
         x = x or 0,
         y = y or 0,
         speed = 200,
-        scale = .25,
+        scale = .2,
+        health = 100,
+        maxHealth = 100,
         currentState = "idle",
         animations = {},
-        currentAnimation = nil
+        currentAnimation = nil,
+        facingDirection = 1 -- 1 for right, -1 for left
     }
 
      -- Load all animation types
@@ -66,7 +69,7 @@ function Player:setState(newState)
 end
 
 
-function Player:update(dt)
+function Player:update(dt, level)
     local moving = false
     local shooting = false
     local melee = false
@@ -80,16 +83,16 @@ function Player:update(dt)
     if love.keyboard.isDown("s", "down") then
         self.y = self.y + self.speed * dt
         moving = true
-    end
-
-    if love.keyboard.isDown("a", "left") then
+    end    if love.keyboard.isDown("a", "left") then
         self.x = self.x - self.speed * dt
         moving = true
+        self.facingDirection = -1 -- Facing left
     end
 
     if love.keyboard.isDown("d", "right") then
         self.x = self.x + self.speed * dt
         moving = true
+        self.facingDirection = 1 -- Facing right
     end
     
     -- Combat inputs (you can change these keys)
@@ -118,9 +121,16 @@ function Player:update(dt)
     -- Update current animation
     self:updateAnimation(dt)
     
-    -- Keep player on screen
-    self.x = math.max(0, math.min(love.graphics.getWidth(), self.x))
-    self.y = math.max(0, math.min(love.graphics.getHeight(), self.y))
+    
+    if level then
+        -- Keep player within level boundaries
+        self.x = math.max(0, math.min(level.width, self.x))
+        self.y = math.max(0, math.min(level.height, self.y))
+    else
+        -- Existing screen boundary code
+        self.x = math.max(0, math.min(love.graphics.getWidth(), self.x))
+        self.y = math.max(0, math.min(love.graphics.getHeight(), self.y))
+    end
 end
 
 
@@ -154,17 +164,28 @@ function Player:updateAnimation(dt)
 end
 
 
-function Player:draw()
-    if not self.currentAnimation then return end
+function Player:draw(offsetX, offsetY)
+    offsetX = offsetX or 0
+    offsetY = offsetY or 0
+
+    if not self.currentAnimation then
+         return 
+    end
     
     local currentImage = self.currentAnimation.frames[self.currentAnimation.currentFrame]
     if currentImage then
-        love.graphics.draw(currentImage, self.x, self.y, 0, self.scale, self.scale, currentImage:getWidth()/2, currentImage:getHeight()/2)
+        -- Calculate scale with direction (negative scale flips the image)
+        local scaleX = self.scale * self.facingDirection
+        local scaleY = self.scale
+        
+        love.graphics.draw(currentImage, self.x + offsetX, self.y + offsetY, 0, scaleX, scaleY, currentImage:getWidth()/2, currentImage:getHeight()/2)
     end
     
     -- Debug: Show current state
     love.graphics.setColor(1, 1, 1)
     love.graphics.print("State: " .. self.currentState, 10, 10)
+    love.graphics.print("Facing: " .. (self.facingDirection == 1 and "Right" or "Left"), 10, 30)
+    love.graphics.print("Position: " .. math.floor(self.x) .. ", " .. math.floor(self.y), 10, 50)
 end
 
 return Player
