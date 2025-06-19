@@ -3,7 +3,7 @@ local Level = require("level")
 local UI = require("ui")
 local GameUI = require("game_ui")
 local DebugConsole = require("lib.debug_console")
-local InputHandler = require("lib.input_handler")
+local Input = require("input")
 
 -- Game state variables
 local gameState = "menu"  -- Can be "menu", "playing", "paused"
@@ -19,57 +19,18 @@ function love.load()
     -- Initialize UI system
     UI.init()
     
-    -- Initialize debug console
+    -- Initialize debug console and register variables
     DebugConsole.init()
-	-- Register your game's variables for debug
     DebugConsole.registerVariable("playerPosition", {x=0, y=0})
     DebugConsole.registerVariable("gameState", gameState)
     
-    -- Initialize input handler with current game state
-    InputHandler.init(gameState)
-    
-    -- Set up menu input handlers
-    InputHandler.registerKeyPressed("menu", "return", function()
-        startGame()
-        return true
-    end)
-    
-    -- Set up pause menu input handlers
-    InputHandler.registerKeyPressed("paused", "escape", function()
-        resumeGame()
-        return true
-    end)
+    -- Initialize our input system with the game state and pass the main module (_G)
+    -- This allows the Input module to access key functions like startGame and resumeGame
+    Input.init(gameState, nil, _G)
 
     -- Load main menu UI
     GameUI.initMainMenu(function()
         startGame()
-    end)
-
-    -- Register player-specific input handlers
-    InputHandler.registerKeyPressed("playing", "space", function()
-        -- Shooting is handled per-frame in player update
-        return false
-    end)
-    
-    InputHandler.registerKeyPressed("playing", "f", function()
-        -- Melee is handled per-frame in player update
-        return false
-    end)
-    
-    -- Register global debug keys
-    InputHandler.registerGlobalKeyPressed("f3", function()
-        DebugConsole.print("FPS: " .. love.timer.getFPS(), {0.2, 1, 0.2, 1})
-        return true
-    end)
-
-    -- Register UI mouse handlers for all game states
-    -- Using 1 for left mouse button
-    InputHandler.registerGlobalMousePressed(1, function(x, y)
-        return UI.handleMousePressed(x, y, 1)
-    end)
-    
-    InputHandler.registerGlobalMouseReleased(1, function(x, y)
-        return UI.handleMouseReleased(x, y, 1)
     end)
 end
 
@@ -101,34 +62,34 @@ function love.run()
 					if not love.quit or not love.quit() then
 						return a or 0
 					end
-				elseif name == "keypressed" and not DebugConsole.visible then
-					-- Input handler will handle this
-					InputHandler.handleKeyPressed(a, b, c)
-				elseif name == "keyreleased" and not DebugConsole.visible then
-					-- Input handler will handle this
-					InputHandler.handleKeyReleased(a, b)
+				elseif name == "keypressed" then
+					-- Let the input system handle this - it will properly route to DebugConsole if visible
+					Input.handleKeyPressed(a, b, c)
+				elseif name == "keyreleased" then
+					-- Let the input system handle this - it will properly route to DebugConsole if visible
+					Input.handleKeyReleased(a, b)
 				elseif name == "mousepressed" then
-					-- Pass to input handler first
-					if not DebugConsole.visible and not InputHandler.handleMousePressed(a, b, c, d, e) then
+					-- Let input system handle mouse events - it will check DebugConsole.visible internally
+					if not Input.handleMousePressed(a, b, c, d, e) then
 						-- If not handled and we have a default handler, use it
 						if love.mousepressed then
 							love.mousepressed(a, b, c, d, e)
 						end
 					end
 				elseif name == "mousereleased" then
-					-- Pass to input handler first
-					if not DebugConsole.visible and not InputHandler.handleMouseReleased(a, b, c, d, e) then
+					-- Let input system handle mouse events - it will check DebugConsole.visible internally
+					if not Input.handleMouseReleased(a, b, c, d, e) then
 						-- If not handled and we have a default handler, use it
 						if love.mousereleased then
 							love.mousereleased(a, b, c, d, e)
 						end
 					end
-				elseif name == "mousemoved" and not DebugConsole.visible then
-					-- Pass to input handler
-					InputHandler.handleMouseMoved(a, b, c, d, e)
-				elseif name == "wheelmoved" and not DebugConsole.visible then
-					-- Pass to input handler
-					InputHandler.handleWheelMoved(a, b)
+				elseif name == "mousemoved" then
+					-- Pass to input system
+					Input.handleMouseMoved(a, b, c, d, e)
+				elseif name == "wheelmoved" then
+					-- Pass to input system
+					Input.handleWheelMoved(a, b)
 				else
 					-- Use default handler for other events
 					if love.handlers[name] then
@@ -168,20 +129,9 @@ function love.run()
 end
 
 function love.update(dt)
-    -- Update input handler
-    InputHandler.update(dt)
+    -- Update input system
+    Input.update(dt)
     
-    -- Handle pause menu
-    -- Only check if we're not in the debug console
-    if gameState == "playing" and InputHandler.wasPressed("escape") and not DebugConsole.visible then
-        gameState = "paused"
-        InputHandler.setGameState(gameState)
-        UI.clear()
-        GameUI.initPauseMenu(function()
-            resumeGame()
-        end)
-    end
-
     -- Only update game elements if playing and player exists
     if gameState == "playing" and player then
         player:update(dt, currentLevel, InputHandler)
@@ -233,12 +183,21 @@ end
 function love.mousepressed(x, y, button, isTouch, presses)
     if DebugConsole.visible then
         -- Debug console could handle mouse events here
+        return true
     end
 end
 
 function love.mousereleased(x, y, button, isTouch, presses)
     if DebugConsole.visible then
         -- Debug console could handle mouse events here
+        return true
+    end
+end
+
+function love.wheelmoved(x, y)
+    if DebugConsole.visible then
+        -- Let debug console handle wheel movement for scrolling
+        return DebugConsole.wheelmoved(x, y)
     end
 end
 
@@ -249,7 +208,7 @@ function startGame()
     
     -- Start game callback
     gameState = "playing"
-    InputHandler.setGameState(gameState)
+    Input.setGameState(gameState)
     UI.clear()
     uiCallbacks = GameUI.initGameUI(player)
 end
@@ -257,7 +216,7 @@ end
 -- Function to resume the game from pause
 function resumeGame()
     gameState = "playing"
-    InputHandler.setGameState(gameState)
+    Input.setGameState(gameState)
     UI.clear()
     uiCallbacks = GameUI.initGameUI(player)
 end

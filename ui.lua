@@ -323,6 +323,27 @@ function UI.createDialog(title, message, options)
     dialog.update = function(self, dt)
         -- Handle button interactions
     end
+      dialog.update = function(self, dt)
+        -- Handle button interactions
+        if UI.isMouseReleased then
+            local buttonWidth = 100
+            local buttonHeight = 40
+            local buttonY = self.y + self.height - 60
+            local buttonSpacing = 20
+            local totalButtonWidth = #self.options * buttonWidth + (#self.options - 1) * buttonSpacing
+            local startX = self.x + (self.width - totalButtonWidth) / 2
+            
+            for i, option in ipairs(self.options) do
+                local buttonX = startX + (i - 1) * (buttonWidth + buttonSpacing)
+                
+                if UI.mouseX >= buttonX and UI.mouseX <= buttonX + buttonWidth and
+                   UI.mouseY >= buttonY and UI.mouseY <= buttonY + buttonHeight then
+                    option[2]() -- Call the button's callback
+                    return true
+                end
+            end
+        end
+    end
     
     dialog.draw = function(self)
         -- Dim the background
@@ -361,10 +382,6 @@ function UI.createDialog(title, message, options)
             if UI.mouseX >= buttonX and UI.mouseX <= buttonX + buttonWidth and
                UI.mouseY >= buttonY and UI.mouseY <= buttonY + buttonHeight then
                 love.graphics.setColor(0.5, 0.5, 0.5, 1.0)
-                
-                if UI.isMouseReleased then
-                    option[2]() -- Call the button's callback
-                end
             else
                 love.graphics.setColor(0.3, 0.3, 0.3, 1.0)
             end

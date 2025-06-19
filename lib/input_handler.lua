@@ -110,12 +110,7 @@ function InputHandler.init(initialGameState)
         end
         return false
     end)
-    
-    -- Register escape key to pause/unpause when playing
-    InputHandler.registerKeyPressed("playing", "escape", function()
-        InputHandler.setGameState("paused")
-        return true
-    end)
+      -- Remove direct escape key binding - this will be handled by the Input module instead
     
     return InputHandler
 end
@@ -192,24 +187,25 @@ function InputHandler.handleKeyPressed(key, scancode, isRepeat)
     
     local handled = false
     
-    -- First check global handlers
+    -- First check global handlers (always process these, like debug console toggle)
     if InputHandler.handlers.global.keypressed[key] then
         handled = InputHandler.handlers.global.keypressed[key](scancode, isRepeat) or handled
     end
     
-    -- Then check state-specific handlers if not handled by global
+    -- If Debug Console is active, let it handle all other keys
+    local DebugConsole = require("lib.debug_console")
+    if DebugConsole and DebugConsole.visible then
+        if key ~= "`" and key ~= "~" then -- Don't double-process console toggle
+            DebugConsole.keypressed(key, scancode, isRepeat)
+            return true
+        end
+        return handled
+    end
+    
+    -- Then check state-specific handlers if debug console isn't active
     if not handled and InputHandler.handlers[InputHandler.currentGameState] and 
        InputHandler.handlers[InputHandler.currentGameState].keypressed[key] then
         handled = InputHandler.handlers[InputHandler.currentGameState].keypressed[key](scancode, isRepeat) or handled
-    end
-    
-    -- If Debug Console is active, let it handle keys
-    if not handled and InputHandler.DEBUG_MODE then
-        local DebugConsole = require("lib.debug_console")
-        if DebugConsole and DebugConsole.visible then
-            DebugConsole.keypressed(key, scancode, isRepeat)
-            handled = true
-        end
     end
     
     return handled
@@ -241,7 +237,18 @@ function InputHandler.handleMousePressed(x, y, button, isTouch, presses)
     
     local handled = false
     
-    -- First check global handlers
+    -- First check if Debug Console is visible
+    local DebugConsole = require("lib.debug_console")
+    if DebugConsole and DebugConsole.visible then
+        -- Let the debug console handle it if needed
+        -- You may need to implement this function in your debug console
+        if DebugConsole.mousepressed then
+            DebugConsole.mousepressed(x, y, button, isTouch, presses)
+            return true
+        end
+    end
+    
+    -- Then check global handlers
     if InputHandler.handlers.global.mousepressed[button] then
         handled = InputHandler.handlers.global.mousepressed[button](x, y, isTouch, presses) or handled
     end
@@ -261,7 +268,18 @@ function InputHandler.handleMouseReleased(x, y, button, isTouch, presses)
     
     local handled = false
     
-    -- First check global handlers
+    -- First check if Debug Console is visible
+    local DebugConsole = require("lib.debug_console")
+    if DebugConsole and DebugConsole.visible then
+        -- Let the debug console handle it if needed
+        -- You may need to implement this function in your debug console
+        if DebugConsole.mousereleased then
+            DebugConsole.mousereleased(x, y, button, isTouch, presses)
+            return true
+        end
+    end
+    
+    -- Then check global handlers
     if InputHandler.handlers.global.mousereleased[button] then
         handled = InputHandler.handlers.global.mousereleased[button](x, y, isTouch, presses) or handled
     end

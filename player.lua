@@ -1,6 +1,7 @@
 local Player = {}
 
-function Player.new(x, y)    local self = {
+function Player.new(x, y)    
+    local self = {
         x = x or 0,
         y = y or 0,
         speed = 200,
@@ -69,15 +70,18 @@ function Player:setState(newState)
 end
 
 
-function Player:update(dt, level, inputHandler)
+function Player:update(dt, level, input)
     local moving = false
     local shooting = false
     local melee = false
 
-    -- Input handling using InputHandler
-    if inputHandler then
-        -- Get movement vector from input handler
-        local dx, dy = inputHandler.getMovementVector()
+    -- Try to get our input module
+    local Input = input or package.loaded["input"]
+    
+    -- Input handling
+    if Input then
+        -- Get movement vector from input module
+        local dx, dy = Input.getMovementVector()
         
         if dx ~= 0 or dy ~= 0 then
             self.x = self.x + dx * self.speed * dt
@@ -90,16 +94,16 @@ function Player:update(dt, level, inputHandler)
             end
         end
         
-        -- Combat inputs using InputHandler
-        if inputHandler.isDown("space") then
+        -- Combat inputs using Input
+        if Input.isDown("jump") then
             shooting = true
         end
         
-        if inputHandler.isDown("f") then
+        if Input.isDown("attack") then
             melee = true
         end
     else
-        -- Legacy input handling if InputHandler not provided
+        -- Legacy input handling if Input not provided
         if love.keyboard.isDown("w", "up") then
             self.y = self.y - self.speed * dt
             moving = true

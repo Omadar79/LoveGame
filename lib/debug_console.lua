@@ -98,7 +98,7 @@ function DebugConsole.onResize()
                                love.graphics.getHeight() / 2)
 end
 
--- New: Register a global variable for tracking
+-- Register a global variable for tracking
 function DebugConsole.registerVariable(name, value, description)
     DebugConsole.debugVariables[name] = {
         value = value,
@@ -107,7 +107,7 @@ function DebugConsole.registerVariable(name, value, description)
     }
 end
 
--- New: Update a registered variable
+-- Update a registered variable
 function DebugConsole.updateVariable(name, value)
     if DebugConsole.debugVariables[name] then
         DebugConsole.debugVariables[name].value = value
@@ -116,7 +116,7 @@ function DebugConsole.updateVariable(name, value)
     end
 end
 
--- New: Register a callback function that will be called when certain commands are executed
+-- Register a callback function that will be called when certain commands are executed
 function DebugConsole.registerCallback(name, callback)
     DebugConsole.callbackRegistry[name] = callback
 end
@@ -135,6 +135,9 @@ function DebugConsole.toggle()
     local InputHandler = package.loaded["lib.input_handler"]
     
     if DebugConsole.visible then
+        -- Reset history scroll position when console opens
+        DebugConsole.historyScroll = 0
+        
         -- Store original handlers if we're not using input handler
         if not InputHandler then
             DebugConsole.originalHandlers.keypressed = love.keypressed
@@ -268,11 +271,17 @@ function DebugConsole.keypressed(key)
             DebugConsole.historyPosition = DebugConsole.historyPosition + 1
             DebugConsole.input = ""
             DebugConsole.cursorPosition = 0
-        end
-    elseif key == "home" then
+        end    elseif key == "home" then
         DebugConsole.cursorPosition = 0
     elseif key == "end" then
         DebugConsole.cursorPosition = string.len(DebugConsole.input)
+    elseif key == "pageup" then
+        -- Scroll back in history
+        local maxScrollback = math.max(0, #DebugConsole.history - DebugConsole.maxLines)
+        DebugConsole.historyScroll = math.min(maxScrollback, DebugConsole.historyScroll + DebugConsole.maxLines / 2)
+    elseif key == "pagedown" then
+        -- Scroll forward in history
+        DebugConsole.historyScroll = math.max(0, DebugConsole.historyScroll - DebugConsole.maxLines / 2)
     end
 end
 
@@ -332,30 +341,35 @@ function DebugConsole.formatVarValue(value)
     return displayValue
 end
 
+
 function DebugConsole.draw()
-    -- When not visible, just draw minimal debug info at top
+    -- When not visible, only show minimal debug info if enabled in config
     if not DebugConsole.visible then
         local y = 5
         love.graphics.setColor(1, 1, 1, 0.5)
         love.graphics.setFont(DebugConsole.smallFont)
         
-        -- Draw FPS info
-        love.graphics.print("FPS: " .. love.timer.getFPS(), 5, y)
-        y = y + DebugConsole.smallFont:getHeight()
+        -- Draw FPS info if enabled
+        if DebugConsole.config.showFpsWhenCollapsed then
+            love.graphics.print("FPS: " .. love.timer.getFPS(), 5, y)
+            y = y + DebugConsole.smallFont:getHeight()
+        end
         
-        -- Draw watched debug variables
+        -- Draw watched debug variables if enabled
         local hasWatched = false
-        for name, info in pairs(DebugConsole.debugVariables) do
-            if info.watched then
-                hasWatched = true
-                local displayValue = DebugConsole.formatVarValue(info.value)
-                love.graphics.print(name .. ": " .. displayValue, 5, y)
-                y = y + DebugConsole.smallFont:getHeight()
+        if DebugConsole.config.showWatchedVarsWhenCollapsed then
+            for name, info in pairs(DebugConsole.debugVariables) do
+                if info.watched then
+                    hasWatched = true
+                    local displayValue = DebugConsole.formatVarValue(info.value)
+                    love.graphics.print(name .. ": " .. displayValue, 5, y)
+                    y = y + DebugConsole.smallFont:getHeight()
+                end
             end
         end
         
-        -- If we're not watching any specific variables, show a few by default
-        if not hasWatched then
+        -- If config allows and we're not watching anything specific, show a few by default
+        if DebugConsole.config.showDefaultVarsWhenCollapsed and not hasWatched then
             local count = 0
             for name, info in pairs(DebugConsole.debugVariables) do
                 local displayValue = DebugConsole.formatVarValue(info.value)
@@ -363,7 +377,7 @@ function DebugConsole.draw()
                 y = y + DebugConsole.smallFont:getHeight()
                 
                 count = count + 1
-                if count >= 3 then break end -- Only show 3 variables when collapsed
+                if count >= DebugConsole.config.maxDefaultVars then break end
             end
         end
         
@@ -373,36 +387,75 @@ function DebugConsole.draw()
     
     -- Draw console background
     love.graphics.setColor(DebugConsole.background)
-    love.graphics.rectangle("fill", 0, 0, DebugConsole.width, DebugConsole.height)
-    
-    -- Draw history
+    love.graphics.rectangle("fill", 0, 0, DebugConsole.width, DebugConsole.height)    -- Draw history
     love.graphics.setFont(DebugConsole.font)
-    local y = DebugConsole.height - DebugConsole.lineHeight * 2 - DebugConsole.padding
     
-    -- Calculate which history entries to show
-    local startIdx = math.max(1, #DebugConsole.history - DebugConsole.maxLines + 1)
-    for i = startIdx, #DebugConsole.history do
+    -- Apply history scrolling (0 means show the most recent entries)
+    local maxScrollback = math.max(0, #DebugConsole.history - DebugConsole.maxLines)
+    DebugConsole.historyScroll = math.min(DebugConsole.historyScroll, maxScrollback)
+    
+    -- Calculate which history entries to show with scrolling
+    local startIdx = math.max(1, #DebugConsole.history - DebugConsole.maxLines + 1 - DebugConsole.historyScroll)
+    local endIdx = math.min(startIdx + DebugConsole.maxLines - 1, #DebugConsole.history)
+    
+    -- Draw scroll indicators if needed
+    if DebugConsole.historyScroll > 0 then
+        love.graphics.setColor(0.7, 0.7, 0.9, 0.7)
+        love.graphics.print("▲ Scroll up more ▲", DebugConsole.width / 2 - 80, DebugConsole.padding)
+    end
+    
+    if DebugConsole.historyScroll < maxScrollback then
+        love.graphics.setColor(0.7, 0.7, 0.9, 0.7)
+        love.graphics.print("▼ More history below ▼", DebugConsole.width / 2 - 80, 
+            DebugConsole.height - DebugConsole.lineHeight * 2 - DebugConsole.padding * 2)
+    end
+    
+    -- Start from the top of the console area (with space for scroll indicator)
+    local y = DebugConsole.padding
+    if DebugConsole.historyScroll > 0 then 
+        y = y + DebugConsole.lineHeight * 1.2 
+    end
+    
+    -- Loop through visible history entries in chronological order
+    for i = startIdx, endIdx do
         local entry = DebugConsole.history[i]
         love.graphics.setColor(entry.color)
         love.graphics.print(entry.text, DebugConsole.padding, y)
-        y = y - DebugConsole.lineHeight
+        y = y + DebugConsole.lineHeight
     end
-    
-    -- Draw input line
+      -- Draw divider line between history and input
+    love.graphics.setColor(0.3, 0.3, 0.4, 0.8)
+    love.graphics.line(
+        DebugConsole.padding, 
+        DebugConsole.height - DebugConsole.lineHeight - DebugConsole.padding * 1.5, 
+        DebugConsole.width - DebugConsole.padding, 
+        DebugConsole.height - DebugConsole.lineHeight - DebugConsole.padding * 1.5
+    )
+      -- Draw input line at the bottom of the console
     love.graphics.setColor(DebugConsole.textColor)
-    y = DebugConsole.height - DebugConsole.lineHeight - DebugConsole.padding
-    love.graphics.print(DebugConsole.inputPrefix .. DebugConsole.input, DebugConsole.padding, y)
+    local inputY = DebugConsole.height - DebugConsole.lineHeight - DebugConsole.padding
+    love.graphics.print(DebugConsole.inputPrefix .. DebugConsole.input, DebugConsole.padding, inputY)
     
     -- Draw cursor
     if DebugConsole.showCursor then
         local cursorX = DebugConsole.padding + DebugConsole.font:getWidth(DebugConsole.inputPrefix .. 
                      string.sub(DebugConsole.input, 1, DebugConsole.cursorPosition))
-        love.graphics.line(cursorX, y, cursorX, y + DebugConsole.lineHeight)
+        love.graphics.line(cursorX, inputY, cursorX, inputY + DebugConsole.lineHeight)
     end
     
     -- Reset color
     love.graphics.setColor(1, 1, 1, 1)
 end
+
+
+-- Configuration for what's shown by default
+DebugConsole.config = {
+    showFpsWhenCollapsed = false,
+    showWatchedVarsWhenCollapsed = false,
+    showDefaultVarsWhenCollapsed = false,
+    maxDefaultVars = 3
+}
+
 
 -- Add default commands that work with any project
 DebugConsole.registerCommand("fps", "Show current FPS", 
@@ -427,15 +480,7 @@ DebugConsole.registerCommand("vars", "List all debug variables",
             DebugConsole.print("  " .. name .. " = " .. valueStr .. watchStatus)
         end
     end)
-    
-DebugConsole.registerCommand("gc", "Run garbage collection", 
-    function() 
-        local before = collectgarbage("count")
-        collectgarbage("collect")
-        local after = collectgarbage("count")
-        DebugConsole.print(string.format("Garbage collected: %.2f KB", before - after))
-    end)
-    
+  
 DebugConsole.registerCommand("watch", "Watch a variable continuously (watch varname)", 
     function(args) 
         if #args < 1 then
@@ -506,5 +551,129 @@ DebugConsole.registerCommand("inspect", "Inspect table contents (inspect varname
             DebugConsole.print("  " .. tostring(k) .. " = " .. valueStr)
         end
     end)
+
+-- Command to show/hide FPS when console is collapsed
+DebugConsole.registerCommand("showfps", "Toggle showing FPS when console is collapsed (showfps on/off)", 
+    function(args) 
+        local value = args[1] and args[1]:lower() or ""
+        if value == "on" or value == "true" or value == "1" or value == "yes" then
+            DebugConsole.config.showFpsWhenCollapsed = true
+            DebugConsole.print("FPS display enabled when console is collapsed")
+        elseif value == "off" or value == "false" or value == "0" or value == "no" then
+            DebugConsole.config.showFpsWhenCollapsed = false
+            DebugConsole.print("FPS display disabled when console is collapsed")
+        else
+            DebugConsole.print("Current setting: FPS display is " .. 
+                (DebugConsole.config.showFpsWhenCollapsed and "enabled" or "disabled") .. 
+                " when console is collapsed")
+            DebugConsole.print("Usage: showfps on|off")
+        end
+    end)
+
+-- Command to show/hide watched variables when console is collapsed
+DebugConsole.registerCommand("showwatched", "Toggle showing watched variables when console is collapsed (showwatched on/off)", 
+    function(args) 
+        local value = args[1] and args[1]:lower() or ""
+        if value == "on" or value == "true" or value == "1" or value == "yes" then
+            DebugConsole.config.showWatchedVarsWhenCollapsed = true
+            DebugConsole.print("Watched variables display enabled when console is collapsed")
+        elseif value == "off" or value == "false" or value == "0" or value == "no" then
+            DebugConsole.config.showWatchedVarsWhenCollapsed = false
+            DebugConsole.print("Watched variables display disabled when console is collapsed")
+        else
+            DebugConsole.print("Current setting: Watched variables display is " .. 
+                (DebugConsole.config.showWatchedVarsWhenCollapsed and "enabled" or "disabled") .. 
+                " when console is collapsed")
+            DebugConsole.print("Usage: showwatched on|off")
+        end
+    end)
+
+-- Command to show/hide default variables when console is collapsed
+DebugConsole.registerCommand("showdefaultvars", "Toggle showing default variables when console is collapsed (showdefaultvars on/off)", 
+    function(args) 
+        local value = args[1] and args[1]:lower() or ""
+        if value == "on" or value == "true" or value == "1" or value == "yes" then
+            DebugConsole.config.showDefaultVarsWhenCollapsed = true
+            DebugConsole.print("Default variables display enabled when console is collapsed")
+        elseif value == "off" or value == "false" or value == "0" or value == "no" then
+            DebugConsole.config.showDefaultVarsWhenCollapsed = false
+            DebugConsole.print("Default variables display disabled when console is collapsed")
+        else
+            DebugConsole.print("Current setting: Default variables display is " .. 
+                (DebugConsole.config.showDefaultVarsWhenCollapsed and "enabled" or "disabled") .. 
+                " when console is collapsed")
+            DebugConsole.print("Usage: showdefaultvars on|off")
+        end
+    end)
+    
+-- Command to set how many default variables to show
+DebugConsole.registerCommand("maxvars", "Set how many default variables to display (maxvars [number])", 
+    function(args) 
+        local value = tonumber(args[1])
+        if value and value >= 0 then
+            DebugConsole.config.maxDefaultVars = value
+            DebugConsole.print("Now showing up to " .. value .. " default variables when console is collapsed")
+        else
+            DebugConsole.print("Current setting: Showing up to " .. DebugConsole.config.maxDefaultVars .. 
+                " default variables when console is collapsed")
+            DebugConsole.print("Usage: maxvars [number]")
+        end
+    end)
+
+-- Master command to enable/disable all console displays
+DebugConsole.registerCommand("display", "Enable/disable all console displays when collapsed (display on/off)", 
+    function(args) 
+        local value = args[1] and args[1]:lower() or ""
+        if value == "on" or value == "true" or value == "1" or value == "yes" then
+            DebugConsole.config.showFpsWhenCollapsed = true
+            DebugConsole.config.showWatchedVarsWhenCollapsed = true
+            DebugConsole.config.showDefaultVarsWhenCollapsed = true
+            DebugConsole.print("All displays enabled when console is collapsed")
+        elseif value == "off" or value == "false" or value == "0" or value == "no" then
+            DebugConsole.config.showFpsWhenCollapsed = false
+            DebugConsole.config.showWatchedVarsWhenCollapsed = false
+            DebugConsole.config.showDefaultVarsWhenCollapsed = false
+            DebugConsole.print("All displays disabled when console is collapsed")
+        else
+            local status = "off"
+            if DebugConsole.config.showFpsWhenCollapsed or 
+               DebugConsole.config.showWatchedVarsWhenCollapsed or 
+               DebugConsole.config.showDefaultVarsWhenCollapsed then
+                status = "on"
+            end
+            DebugConsole.print("Current setting: Console displays are " .. status .. " when collapsed")
+            DebugConsole.print("Usage: display on|off")
+        end
+    end)
+
+-- Add scroll handling for history
+DebugConsole.historyScroll = 0  -- How far we've scrolled back in history
+
+-- Command to scroll console history
+DebugConsole.registerCommand("scroll", "Scroll console history (scroll [amount])", 
+    function(args) 
+        local amount = tonumber(args[1]) or 0
+        DebugConsole.historyScroll = math.max(0, math.min(#DebugConsole.history - DebugConsole.maxLines, DebugConsole.historyScroll + amount))
+        DebugConsole.print("Scrolled to position " .. DebugConsole.historyScroll)
+    end)
+
+-- Add mouse wheel handler for the debug console
+function DebugConsole.wheelmoved(x, y)
+    if not DebugConsole.visible then
+        return false
+    end
+    
+    -- Scroll up/down through history
+    if y > 0 then
+        -- Scroll back in history (wheel up)
+        local maxScrollback = math.max(0, #DebugConsole.history - DebugConsole.maxLines)
+        DebugConsole.historyScroll = math.min(maxScrollback, DebugConsole.historyScroll + 3)
+    elseif y < 0 then
+        -- Scroll forward in history (wheel down)
+        DebugConsole.historyScroll = math.max(0, DebugConsole.historyScroll - 3)
+    end
+    
+    return true
+end
 
 return DebugConsole
