@@ -18,23 +18,27 @@ function UI.init()
     
     -- Store original font for restoration
     UI.defaultFont = love.graphics.getFont()
-    
-    -- Setup input tracking
-    love.mousepressed = function(x, y, button)
-        if button == 1 then  -- Left mouse button
-            UI.isMousePressed = true
-            UI.mouseX = x
-            UI.mouseY = y
-        end
+end
+
+-- New functions to handle mouse events from InputHandler
+function UI.handleMousePressed(x, y, button)
+    if button == 1 then  -- Left mouse button
+        UI.isMousePressed = true
+        UI.mouseX = x
+        UI.mouseY = y
+        return true  -- We're handling this event
     end
-    
-    love.mousereleased = function(x, y, button)
-        if button == 1 then  -- Left mouse button
-            UI.isMouseReleased = true
-            UI.mouseX = x
-            UI.mouseY = y
-        end
+    return false
+end
+
+function UI.handleMouseReleased(x, y, button)
+    if button == 1 then  -- Left mouse button
+        UI.isMouseReleased = true
+        UI.mouseX = x
+        UI.mouseY = y
+        return true  -- We're handling this event
     end
+    return false
 end
 
 -- Update UI elements

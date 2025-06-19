@@ -69,39 +69,67 @@ function Player:setState(newState)
 end
 
 
-function Player:update(dt, level)
+function Player:update(dt, level, inputHandler)
     local moving = false
     local shooting = false
     local melee = false
 
-    -- Input handling
-    if love.keyboard.isDown("w", "up") then
-        self.y = self.y - self.speed * dt
-        moving = true
-    end
+    -- Input handling using InputHandler
+    if inputHandler then
+        -- Get movement vector from input handler
+        local dx, dy = inputHandler.getMovementVector()
+        
+        if dx ~= 0 or dy ~= 0 then
+            self.x = self.x + dx * self.speed * dt
+            self.y = self.y + dy * self.speed * dt
+            moving = true
+            
+            -- Update facing direction based on horizontal movement
+            if dx ~= 0 then
+                self.facingDirection = (dx > 0) and 1 or -1 -- 1 for right, -1 for left
+            end
+        end
+        
+        -- Combat inputs using InputHandler
+        if inputHandler.isDown("space") then
+            shooting = true
+        end
+        
+        if inputHandler.isDown("f") then
+            melee = true
+        end
+    else
+        -- Legacy input handling if InputHandler not provided
+        if love.keyboard.isDown("w", "up") then
+            self.y = self.y - self.speed * dt
+            moving = true
+        end
 
-    if love.keyboard.isDown("s", "down") then
-        self.y = self.y + self.speed * dt
-        moving = true
-    end    if love.keyboard.isDown("a", "left") then
-        self.x = self.x - self.speed * dt
-        moving = true
-        self.facingDirection = -1 -- Facing left
-    end
+        if love.keyboard.isDown("s", "down") then
+            self.y = self.y + self.speed * dt
+            moving = true
+        end
+        
+        if love.keyboard.isDown("a", "left") then
+            self.x = self.x - self.speed * dt
+            moving = true
+            self.facingDirection = -1 -- Facing left
+        end
 
-    if love.keyboard.isDown("d", "right") then
-        self.x = self.x + self.speed * dt
-        moving = true
-        self.facingDirection = 1 -- Facing right
-    end
-    
-    -- Combat inputs (you can change these keys)
-    if love.keyboard.isDown("space") then
-        shooting = true
-    end
+        if love.keyboard.isDown("d", "right") then
+            self.x = self.x + self.speed * dt
+            moving = true
+            self.facingDirection = 1 -- Facing right
+        end
+        
+        -- Combat inputs (you can change these keys)
+        if love.keyboard.isDown("space") then
+            shooting = true
+        end
 
-    if love.keyboard.isDown("f") then
-        melee = true
+        if love.keyboard.isDown("f") then
+            melee = true
+        end
     end
     
     -- Determine animation state based on actions
@@ -136,14 +164,13 @@ function Player:update(dt, level)
     if self._debugTimer and self._debugTimer > 0 then
         self._debugTimer = self._debugTimer - dt
     else        self._debugTimer = 0.5  -- Update debug info every half second
+          -- Get the debug console module
+        local DebugConsole = require("lib.debug_console")
         
-        -- Get the debug console module
-        local DebugConsole = require("debug_console")
-        
-        -- Update debug values
-        DebugConsole._playerState = "State: " .. self.currentState
-        DebugConsole._playerFacing = "Facing: " .. (self.facingDirection == 1 and "Right" or "Left") 
-        DebugConsole._playerPosition = "Position: " .. math.floor(self.x) .. ", " .. math.floor(self.y)
+        -- Update debug values using the variable registration system
+        DebugConsole.updateVariable("playerState", self.currentState)
+        DebugConsole.updateVariable("playerFacing", (self.facingDirection == 1 and "Right" or "Left"))
+        DebugConsole.updateVariable("playerPosition", {x = math.floor(self.x), y = math.floor(self.y)})
     end
 end
 
